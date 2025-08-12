@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import PlantModal from './PlantModal'
+import AddPlantForm from './AddPlantForm'
 import { buildICS } from '../lib/ics'
 import { fn } from '../lib/functionsBase'
-import AddPlantForm from './AddPlantForm'
 
 export default function Dashboard({ session }) {
   const [plants, setPlants] = useState([])
@@ -15,15 +15,7 @@ export default function Dashboard({ session }) {
   useEffect(() => {
     const load = async () => {
       setLoading(true)
-      const { data: userPlants } = await supabase
-        .from('user_plants_view')
-        .select('*')
-        .order('created_at', { ascending: true })
-
-      setPlants(userPlants || [])
-
       await loadPlants()
-
       const { data: t } = await supabase.rpc('get_upcoming_tasks', { days_ahead: 30 })
       setTasks(t || [])
       setLoading(false)
@@ -49,11 +41,12 @@ export default function Dashboard({ session }) {
 
   const waterNow = async (userPlantId) => {
     await supabase.rpc('log_event', { p_user_plant_id: userPlantId, p_type: 'water' })
-    refresh()
+    await refresh()
   }
+
   const fertilizeNow = async (userPlantId) => {
     await supabase.rpc('log_event', { p_user_plant_id: userPlantId, p_type: 'fertilize' })
-    refresh()
+    await refresh()
   }
 
   const refresh = async () => {
@@ -72,12 +65,17 @@ export default function Dashboard({ session }) {
       applicationServerKey: urlBase64ToUint8Array(vapid),
       userVisibleOnly: true
     })
-    const { error } = await fetch(fn('webpush-register'), {
+    const res = await fetch(fn('webpush-register'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subscription: sub, user_id: session.user.id })
     })
-    if (error) console.error(error)
+    if (!res.ok) {
+      const msg = await res.text().catch(() => '')
+      console.error('webpush-register feilet:', res.status, msg)
+      alert('Klarte ikke å aktivere push-varsler.')
+      return
+    }
     alert('Push-varsler aktivert!')
   }
 
@@ -95,8 +93,7 @@ export default function Dashboard({ session }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-2">
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button className="btn" onClick={registerPush}>Aktiver push-varsler</button>
         <button className="btn" onClick={exportICS}>Eksporter til ICS</button>
         <a className="btn" href={fn('ics-export')} target="_blank" rel="noreferrer">Kalenderfeed (URL)</a>
@@ -140,19 +137,20 @@ export default function Dashboard({ session }) {
           setAdding(false)
           await loadPlants()
           await refresh()
-      }}
-    />
+        }}
+      />
     </div>
   )
 }
 
+// Utils
 function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
   for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
+    outputArray[i] = rawData.charCodeAt(i)
   }
-  return outputArray;
+  return outputArray
 }
