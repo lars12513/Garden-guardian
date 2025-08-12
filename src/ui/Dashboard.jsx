@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import PlantModal from './PlantModal'
 import { buildICS } from '../lib/ics'
+import { fn } from '../lib/functionsBase'
 
 export default function Dashboard({ session }) {
   const [plants, setPlants] = useState([])
@@ -59,7 +60,7 @@ export default function Dashboard({ session }) {
       applicationServerKey: urlBase64ToUint8Array(vapid),
       userVisibleOnly: true
     })
-    const { error } = await fetch(`/functions/v1/webpush-register`, {
+    const { error } = await fetch(fn('webpush-register'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subscription: sub, user_id: session.user.id })
@@ -85,7 +86,7 @@ export default function Dashboard({ session }) {
       <div className="flex gap-2">
         <button className="btn" onClick={registerPush}>Aktiver push-varsler</button>
         <button className="btn" onClick={exportICS}>Eksporter til ICS</button>
-        <a className="btn" href="/functions/v1/ics-export" target="_blank" rel="noreferrer">Kalenderfeed (URL)</a>
+        <a className="btn" href={fn('ics-export')} target="_blank" rel="noreferrer">Kalenderfeed (URL)</a>
       </div>
 
       {loading ? <p>Laster…</p> : null}
