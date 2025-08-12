@@ -3,11 +3,13 @@ import { supabase } from '../supabaseClient'
 import PlantModal from './PlantModal'
 import { buildICS } from '../lib/ics'
 import { fn } from '../lib/functionsBase'
+import AddPlantForm from './AddPlantForm'
 
 export default function Dashboard({ session }) {
   const [plants, setPlants] = useState([])
   const [tasks, setTasks] = useState([])
   const [active, setActive] = useState(null)
+  const [adding, setAdding] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -20,12 +22,22 @@ export default function Dashboard({ session }) {
 
       setPlants(userPlants || [])
 
+      await loadPlants()
+
       const { data: t } = await supabase.rpc('get_upcoming_tasks', { days_ahead: 30 })
       setTasks(t || [])
       setLoading(false)
     }
     load()
   }, [])
+
+  const loadPlants = async () => {
+    const { data: userPlants } = await supabase
+      .from('user_plants_view')
+      .select('*')
+      .order('created_at', { ascending: true })
+    setPlants(userPlants || [])
+  }
 
   const nextByPlantId = useMemo(() => {
     const map = new Map()
@@ -84,9 +96,11 @@ export default function Dashboard({ session }) {
   return (
     <div className="space-y-6">
       <div className="flex gap-2">
+      <div className="flex gap-2">
         <button className="btn" onClick={registerPush}>Aktiver push-varsler</button>
         <button className="btn" onClick={exportICS}>Eksporter til ICS</button>
         <a className="btn" href={fn('ics-export')} target="_blank" rel="noreferrer">Kalenderfeed (URL)</a>
+        <button className="btn btn-primary" onClick={() => setAdding(true)}>+ Legg til plante</button>
       </div>
 
       {loading ? <p>Laster…</p> : null}
@@ -118,6 +132,16 @@ export default function Dashboard({ session }) {
       </div>
 
       {active ? <PlantModal plant={active} onClose={() => setActive(null)} onChanged={refresh}/> : null}
+      <AddPlantForm
+        open={adding}
+        onClose={() => setAdding(false)}
+        session={session}
+        onCreated={async () => {
+          setAdding(false)
+          await loadPlants()
+          await refresh()
+      }}
+    />
     </div>
   )
 }
